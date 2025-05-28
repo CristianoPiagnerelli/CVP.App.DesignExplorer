@@ -34,7 +34,11 @@ export class ParallelPlotComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.subscription = this.dataService.getOptions().subscribe(options => {
       this.options = options;
-      this.initPlot();
+
+      // Inizializza il grafico solo la prima volta
+      if (!this.plot) {
+        this.initPlot();
+      }
     });
   }
 
@@ -56,6 +60,7 @@ export class ParallelPlotComponent implements OnInit, OnDestroy {
       { label: 'P6', values: this.options.map(o => o.parameters.P6), range: [0, 100] }
     ];
 
+    // Inizializza i range correnti a [0,100]
     dimensions.forEach(dim => {
       this.currentRanges[dim.label] = [0, 100];
     });
@@ -76,26 +81,27 @@ export class ParallelPlotComponent implements OnInit, OnDestroy {
       margin: { l: 50, r: 50, b: 30, t: 50, pad: 4 }
     };
 
-    Plotly.newPlot('parallel-plot', data, layout);
+    Plotly.newPlot('parallel-plot', data, layout).then((plot: any) => {
+      this.plot = plot;
 
-    const plotElement = document.getElementById('parallel-plot') as any;
+      if (plot && typeof plot.on === 'function') {
+        plot.on('plotly_restyle', () => {
+          const updatedData = plot.data?.[0];
 
-    if (plotElement && typeof plotElement.on === 'function') {
-      plotElement.on('plotly_restyle', () => {
-        const data = plotElement.data?.[0];
-    
-        if (data && data.dimensions) {
-          data.dimensions.forEach((dim: any) => {
-            if (dim.constraintrange) {
-              this.currentRanges[dim.label] = dim.constraintrange;
-            } else {
-              this.currentRanges[dim.label] = [0, 100]; // fallback range
-            }
-          });
-    
-          this.dataService.applyFilters(this.currentRanges);
-        }
-      });
-    }
+          if (updatedData && updatedData.dimensions) {
+            updatedData.dimensions.forEach((dim: any) => {
+              if (dim.constraintrange) {
+                this.currentRanges[dim.label] = dim.constraintrange;
+              } else {
+                this.currentRanges[dim.label] = [0, 100];
+              }
+            });
+
+            // Applica i filtri agli altri componenti, ma non aggiorna il grafico
+            this.dataService.applyFilters(this.currentRanges);
+          }
+        });
+      }
+    });
   }
 }
