@@ -78,21 +78,21 @@ export class ParallelPlotComponent implements OnInit, OnDestroy {
 
     Plotly.newPlot('parallel-plot', data, layout);
 
-    const plotElement = document.getElementById('parallel-plot');
-    if (plotElement) {
-      plotElement.addEventListener('plotly_restyle', (event: any) => {
-        const eventData = event.detail;
-        if (eventData && eventData[0] && eventData[0].dimensions) {
-          const dimensions = eventData[0].dimensions[0];
-          
-          dimensions.forEach((dim: any) => {
+    const plotElement = document.getElementById('parallel-plot') as any;
+
+    if (plotElement && typeof plotElement.on === 'function') {
+      plotElement.on('plotly_restyle', () => {
+        const data = plotElement.data?.[0];
+    
+        if (data && data.dimensions) {
+          data.dimensions.forEach((dim: any) => {
             if (dim.constraintrange) {
               this.currentRanges[dim.label] = dim.constraintrange;
             } else {
-              this.currentRanges[dim.label] = [0, 100];
+              this.currentRanges[dim.label] = [0, 100]; // fallback range
             }
           });
-          
+    
           this.dataService.applyFilters(this.currentRanges);
         }
       });
