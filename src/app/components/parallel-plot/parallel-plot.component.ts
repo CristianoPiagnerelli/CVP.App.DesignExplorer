@@ -6,6 +6,14 @@ import { Subscription } from 'rxjs';
 
 declare var Plotly: any;
 
+// Interfaccia tipizzata per un elemento Plotly
+interface PlotlyHTMLElement extends HTMLElement {
+  data: any[];
+  layout: any;
+  on(event: string, callback: (...args: any[]) => void): void;
+  removeAllListeners?(event?: string): void;
+}
+
 @Component({
   selector: 'app-parallel-plot',
   standalone: true,
@@ -26,7 +34,7 @@ declare var Plotly: any;
 export class ParallelPlotComponent implements OnInit, OnDestroy {
   private options: Option[] = [];
   private subscription: Subscription | null = null;
-  private plot: any;
+  private plot: PlotlyHTMLElement | null = null;
   private currentRanges: { [key: string]: [number, number] } = {};
 
   constructor(private dataService: DataService) {}
@@ -46,6 +54,10 @@ export class ParallelPlotComponent implements OnInit, OnDestroy {
     if (this.subscription) {
       this.subscription.unsubscribe();
     }
+
+    if (this.plot?.removeAllListeners) {
+      this.plot.removeAllListeners('plotly_restyle');
+    }
   }
 
   private initPlot(): void {
@@ -60,7 +72,6 @@ export class ParallelPlotComponent implements OnInit, OnDestroy {
       { label: 'P6', values: this.options.map(o => o.parameters.P6), range: [0, 100] }
     ];
 
-    // Inizializza i range correnti a [0,100]
     dimensions.forEach(dim => {
       this.currentRanges[dim.label] = [0, 100];
     });
@@ -81,27 +92,24 @@ export class ParallelPlotComponent implements OnInit, OnDestroy {
       margin: { l: 50, r: 50, b: 30, t: 50, pad: 4 }
     };
 
-    Plotly.newPlot('parallel-plot', data, layout).then((plot: any) => {
+    Plotly.newPlot('parallel-plot', data, layout).then((plot: PlotlyHTMLElement) => {
       this.plot = plot;
+      plot.on('plotly_restyle', () => {
+        const updatedData = plot.data?.[0];
 
-      if (plot && typeof plot.on === 'function') {
-        plot.on('plotly_restyle', () => {
-          const updatedData = plot.data?.[0];
+        if (updatedData && updatedData.dimensions) {
+          updatedData.dimensions.forEach((dim: any) => {
+            if (dim.constraintrange) {
+              this.currentRanges[dim.label] = dim.constraintrange;
+            } else {
+              this.currentRanges[dim.label] = [0, 100];
+            }
+          });
 
-          if (updatedData && updatedData.dimensions) {
-            updatedData.dimensions.forEach((dim: any) => {
-              if (dim.constraintrange) {
-                this.currentRanges[dim.label] = dim.constraintrange;
-              } else {
-                this.currentRanges[dim.label] = [0, 100];
-              }
-            });
-
-            // Applica i filtri agli altri componenti, ma non aggiorna il grafico
-            this.dataService.applyFilters(this.currentRanges);
-          }
-        });
-      }
+          // Applica i filtri agli altri componenti, ma non aggiorna il grafico
+          this.dataService.applyFilters(this.currentRanges);
+        }
+      });
     });
   }
 }
